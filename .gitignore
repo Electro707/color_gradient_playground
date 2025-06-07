@@ -1,0 +1,9 @@
+*.png
+*.gif
+*.jpg
+
+.bak
+__pycache__
+
+# my own test folder
+test_rgb_cube/
