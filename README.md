@@ -1,7 +1,7 @@
 # Color Gradient Test
 by electro707, 2025-06-07
 
-This is a repository where I played around with color gradients, which I wrote [a blog post about](blogs.electro707.com)
+This is a repository where I played around with color gradients, which I wrote [a blog post about](https://blogs.electro707.com/programming/2025/06/07/colorInterp.html)
 
 
 # Files:
