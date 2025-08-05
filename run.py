@@ -113,6 +113,12 @@ def getInterpolatedColors(colorA, colorB, colorSpConv, interp, _len):
         colorsConv = np.array(colors)
 
     if colorSpConv == 'hsv':
+        # if starting or ending to a zero saturation, have the starting/ending hue be equal
+        if colorsConv[0][1] == 0.0:
+            colorsConv[0][0] = colorsConv[1][0]
+        if colorsConv[1][1] == 0.0:
+            colorsConv[1][0] = colorsConv[0][0]
+
         colorsLinS = np.zeros([3, _len])
         # only allow wrapping of hue
         colorsLinS[0] = interpolate(colorsConv[:,0], _len, interp[0], *interp[1:], wrapPath=True)
@@ -135,22 +141,31 @@ def getInterpolatedColors(colorA, colorB, colorSpConv, interp, _len):
 
 def draw_test_step(colorToInterp, outF):
     stripWidth = 360*stripWidthMultiplier
+    stripWidthSeg = stripWidth // (len(colorToInterp)-1)
     interpTypes = 10
     textWidth = 250
 
     def draw_interpolated(colorA, colorB, yIdx, colorSpConv, interp, xStart=0):
         y_start = getYStart(yIdx)
         y_end = y_start + stripHeight
+        xStartOrig = xStart
 
-        colorsAll = getInterpolatedColors(colorA, colorB, colorSpConv, interp, stripWidth)
-        for x in range(stripWidth):
-            colorsTo = colorsAll[x]
-            colorsTo = colorsTo.astype(int)
-            colorsTo = tuple(colorsTo)
+        for seg in range(len(colorToInterp)-1):
+            colorA = ImageColor.getrgb(colorToInterp[seg])
+            colorB = ImageColor.getrgb(colorToInterp[seg+1])
 
-            draw.line(((x+xStart, y_start), (x+xStart, y_end)), fill=colorsTo)
+            colorsAll = getInterpolatedColors(colorA, colorB, colorSpConv, interp, stripWidthSeg)
+            for x in range(stripWidthSeg):
+                colorsTo = colorsAll[x]
+                colorsTo = colorsTo.astype(int)
+                colorsTo = tuple(colorsTo)
 
-        draw.rectangle([(xStart, y_start), (xStart+stripWidth, y_end)], outline='black', width=2)
+                draw.line(((x+xStart, y_start), (x+xStart, y_end)), fill=colorsTo)
+
+            xStart += stripWidthSeg
+
+
+        draw.rectangle([(xStartOrig, y_start), (xStartOrig+stripWidth, y_end)], outline='black', width=2)
 
         print('\n\n')
 
@@ -235,6 +250,7 @@ def draw_animation(colorToInterp, outF):
     fps = 50
     animationTime = 6                       # sec, total animation time
     animationFms = animationTime*fps        # total animation frames
+    animationFmsSeg = animationFms // (len(colorToInterp)-1)
 
     gifImg = []
     draws = []
@@ -258,18 +274,25 @@ def draw_animation(colorToInterp, outF):
             draws[i].rectangle([(x_start, y_start), (x_start + gradientWidth, y_start + gradientWidth)], outline='white', width=2, fill=c)
 
             draws[i].multiline_text((x_start, 0), text, fill='white', align='left', font_size=32)
-    
-    colors = getInterpolatedColors(colorA, colorB, 'rgb', 'loop_lin', animationFms)
-    drawColor(0, colors, "RGB\nLin")
 
-    colors = getInterpolatedColors(colorA, colorB, 'hsv', 'loop_lin', animationFms)
-    drawColor(1, colors, "HSV\nLin")
+    for seg in range(len(colorToInterp)-1):
+        colorA = ImageColor.getrgb(colorToInterp[seg])
+        colorB = ImageColor.getrgb(colorToInterp[seg+1])
+        frameOffset = seg * animationFmsSeg
 
-    colors = getInterpolatedColors(colorA, colorB, 'hsv', ('loop_smoothstep', 2), animationFms)
-    drawColor(2, colors, "HSV\nSS2")
+        # todo: set loop as optional parameters
 
-    colors = getInterpolatedColors(colorA, colorB, 'hsv', 'loop_sin', animationFms)
-    drawColor(3, colors, "HSV\nSin")
+        colors = getInterpolatedColors(colorA, colorB, 'rgb', 'loop_lin', animationFms)
+        drawColor(0, colors, "RGB\nLin", frameOffset)
+
+        colors = getInterpolatedColors(colorA, colorB, 'hsv', 'loop_lin', animationFms)
+        drawColor(1, colors, "HSV\nLin", frameOffset)
+
+        colors = getInterpolatedColors(colorA, colorB, 'hsv', ('loop_smoothstep', 2), animationFms)
+        drawColor(2, colors, "HSV\nSS2", frameOffset)
+
+        colors = getInterpolatedColors(colorA, colorB, 'hsv', 'loop_sin', animationFms)
+        drawColor(3, colors, "HSV\nSin", frameOffset)
     
     gifImg[0].save(outF, save_all = True, append_images = gifImg[1:], optimize = False, duration = int(1000/fps), loop=0)
 
@@ -281,16 +304,18 @@ def main():
                     prog='Color Gradient Tester',
                     description='This programs allows testing of different gradient interpolations')
 
-    parser.add_argument('colorA', type=str)
-    parser.add_argument('colorB', type=str)
+    parser.add_argument('colors', type=str, help='Comma-delimited hex codes')
     parser.add_argument('-o', '--out', default='out', help='Ouput image file without extension. Defaults to `out`')
     parser.add_argument('-a', '--animation',  action='store_true', help='Draws animation (gif) instead of a gradient test')
-    parser.add_argument('--testSrip', action='store_true', help='Generates a test strip')
+    parser.add_argument('--testStrip', action='store_true', help='Generates a test strip')
     args = parser.parse_args()
 
-    colorToInterp = args.colorA, args.colorB
-    # add # as a prefix so that Pillow can recognize the color
-    colorToInterp = ['#'+c for c in colorToInterp]
+    colorToInterp = args.colors.split(',')
+    for i in range(len(colorToInterp)):
+        colorToInterp[i] = colorToInterp[i].strip()
+        # add # as a prefix so that Pillow can recognize the color
+        if not colorToInterp[i].startswith('#'):
+            colorToInterp[i] = '#' + colorToInterp[i]
 
     if args.animation:
         args.out += '.gif'
